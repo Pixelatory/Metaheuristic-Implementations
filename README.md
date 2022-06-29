@@ -27,3 +27,5 @@ each of which has a different mutation, making it difficult to determine the cor
 it doesn't appear like I've done this correctly. Results express the population has a similar shape of pareto front
 to the known optimal, but is far from it.
 
+![CMOPSO Pareto](images/CMOPSO-front.png)
+
