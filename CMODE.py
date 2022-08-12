@@ -6,28 +6,7 @@ from tqdm import tqdm
 from pymoo.factory import get_problem
 
 from archive import ParetoArchive
-
-
-def gen_random_vector_idx(size):
-    """
-    Generates a random index vector which doesn't allow for
-    the same value as the index it's placed in.
-
-    i.e. doesn't allow for [0, 1, 2, 3, ...]
-    or [8, 1, 8, 8, 8]
-    or [5, 6, 7, 3, 10]
-    """
-    res = []
-    for i in range(size):
-        res.append(random.sample([j for j in range(size) if j != i], 1)[0])
-    return res
-
-
-def lehmer_mean(data):
-    data_sum = np.sum(data)
-    if data_sum == 0:
-        return 0
-    return np.sum(np.power(data, 2)) / data_sum
+from util import lehmer_mean, gen_random_vector_idx
 
 
 def CMODE(problem, low_bound, high_bound, max_iter, pop_size, archive_size, c, F_m_init, CR_m_init, F_a_init, CR_a_init,
@@ -198,7 +177,7 @@ problem = get_problem("zdt1")
 # Must change the problem to -f(x) since CMODE assumes maximization.
 tmp = problem.evaluate
 problem.evaluate = lambda x: -1 * tmp(x)
-archive = CMODE(problem, 0.0, 1.0, 1000, 20, 100, 0.1, 0.5, 0.5, 0.5, 0.9, 0.1, 0.1)
+archive = CMODE(problem, 0.0, 1.0, 500, 20, 100, 0.1, 0.5, 0.5, 0.5, 0.9, 0.1, 0.1)
 
 # Visualize the results of the archive
 # Note: did entry['fit'] * -1 to revert the fitnesses back to their original values.

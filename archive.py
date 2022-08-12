@@ -1,7 +1,18 @@
 import math
+import random
 
 import numpy as np
 from scipy.spatial.distance import cdist
+
+
+def numpy_dominates(x, y):
+    """
+    Checks if x pareto-dominates y.
+
+    :param x: a solution's fitnesses (numpy array)
+    :param y: another solution's fitnesses (numpy array)
+    """
+    return np.logical_and((x >= y).all(axis=1), (x > y).any(axis=1))
 
 
 def dominates(x, y):
@@ -29,6 +40,15 @@ def dominates(x, y):
 
 
 def density(items):
+    """
+    add_item_before_crowding should be False.
+
+    Note: follows the format of items from class Archive, and
+        add_item_before_crowding should be False in Archive.
+
+    :param items:
+    :return:
+    """
     # First, calculate distance between points
     # Source: https://stackoverflow.com/questions/40996957/calculate-distance-between-numpy-arrays
     collected_objs = np.array([entry['fit'] for entry in items])
@@ -51,14 +71,141 @@ def density(items):
     return items
 
 
-class Archive:
-    def __init__(self, capacity):
+def crowdingDistance(items):
+    """
+    Sorts the given list by crowding distance
+    in ascending order. Thus, the first element
+    will have the least distance, meaning
+    it's the most crowded.
+
+    This is an in-place sort.
+
+    Note: follows the format of items from class Archive, and
+        add_item_before_crowding should be False in Archive.
+
+    :param items: List of items to be sorted by crowding distance.
+    """
+    assert len(items) > 0
+
+    for item in items:
+        item["dist"] = 0
+
+    num_of_functions = len(items[0]['fit'])
+    len_archive = len(items)
+    for i in range(num_of_functions):
+        # Sort archive by the fitness on objective i
+        items.sort(key=lambda x: x["fit"][i])
+
+        # Calculate distance of intermediate archive solutions
+        for j in range(1, len(items) - 1):
+            items[j]["dist"] += items[j + 1]["fit"][i] - items[j - 1]["fit"][i]
+
+        items[0]["dist"] = items[len_archive - 1]["dist"] = float('inf')
+
+    items.sort(key=lambda x: x["dist"])
+
+    return items
+
+
+class Grid:
+    """
+    Creating a grid based on the max and min values in objective space (fitness).
+
+    Note: follows the format of items from class Archive, and
+    add_item_before_crowding should be True in Archive.
+
+    Example (seen in code):
+    -------
+    | | | |
+    -------
+    | | | |
+    -------
+    | | | |
+    -------
+    where num_grid = 3. 3 represents the internal spaces each row or column.
+    """
+
+    def __init__(self, size):
+        self.size = size
+        self.item_div = {}
+
+    def calculate(self, items):
         """
+        :param items: List of items to be sorted by grid.
+        """
+
+        # Create the grid cutoffs
+        objs = np.array([item['fit'] for item in items])
+        min_ = np.min(objs, axis=0) - 0.001
+        max_ = np.max(objs, axis=0) + 0.001
+
+        cutoffs = np.linspace(max_, min_, self.size + 1)
+
+        # Calculate the grid populations (density)
+        self.item_div = {}
+        item_grid_index = {}
+        for i in range(len(items)):
+            item_cutoff = [0] * cutoffs.shape[1]
+            for row in cutoffs:
+                for j in range(len(row)):
+                    if items[i]['fit'][j] < row[j]:
+                        item_cutoff[j] += 1
+            tmp = 0
+            for j in range(len(item_cutoff)):
+                tmp += item_cutoff[j] * (self.size ** j)
+
+            if str(tmp) not in item_grid_index:
+                item_grid_index[str(tmp)] = [i]
+            else:
+                item_grid_index[str(tmp)].append(i)
+
+            if str(tmp) not in self.item_div:
+                self.item_div[str(tmp)] = [items[i]['pos']]
+            else:
+                self.item_div[str(tmp)].append(items[i]['pos'])
+
+        # Get the most crowded grid index
+        max_entry = []
+        for k, v in item_grid_index.items():
+            if len(v) > len(max_entry):
+                max_entry = v
+
+        # Randomly select index from most crowded grid
+        rand_idx = random.sample(max_entry, 1)[0]
+
+        # Swap first item in items with item in most crowded grid
+        items[rand_idx], items[0] = items[0], items[rand_idx]
+
+        return items
+
+
+class Archive:
+    def __init__(self, capacity, crowding_function=density, track=None, add_item_before_crowding=False):
+        """
+        Trackable information:
+            - (default) 'pos': Position of solution
+            - (default) 'fit': Fitness of solution
+            - (default) 'dist': Crowding measure of solution (can be for density or crowding distance)
+            - 'sum_fit': Sum of fitness
+
+        Crowding functions:
+            - Density
+            - Crowding distance
+
         :param capacity: Maximum capacity of archive.
         :type capacity: int
+        :param crowding_function: Crowding function used to remove archive entry when capacity is met.
+        :param track: Additional information to track in archive
+        :param add_item_before_crowding: True if item needs to be added to archive and then have crowding calculations complete.
+            False if calculation is made first, and then solution replaced.
         """
+        if track is None:
+            track = []
         self.capacity = capacity
         self.items = []
+        self.track = track
+        self.crowding_function = crowding_function
+        self.add_item_before_crowding = add_item_before_crowding
 
     def add(self, swarm, fitneses):
         """
@@ -69,21 +216,6 @@ class Archive:
 
 
 class ParetoArchive(Archive):
-    """
-        A holder of non-dominated solutions.
-
-        Non-dominated solutions are added in
-        self.items as follows:
-
-        {
-            "pos": position,
-            "fit": fitnesses on all scoring functions,
-            "dist": density value
-        }
-
-        self.items is a list of dictionaries.
-    """
-
     def add(self, pop, fitnesses):
         """
         Attempt to add solutions from population to
@@ -114,17 +246,28 @@ class ParetoArchive(Archive):
                 self.items = [self.items[k] for k in range(len(self.items)) if k not in dominated]
 
                 # the new item to be added to archive
+
                 newItem = {
                     "pos": pop[i].copy(),
                     "fit": fitnesses[i].copy(),
                     "dist": 0,
                 }
 
-                if len(self.items) >= self.capacity:
-                    # Sort by density calculation
-                    self.items = density(self.items)
+                if 'sum_fit' in self.track:
+                    newItem['sum_fit'] = np.sum(fitnesses[i])
 
-                    # First element is most crowded, so replace it
-                    self.items[0] = newItem
+                if len(self.items) >= self.capacity:
+                    if self.add_item_before_crowding:
+                        self.items.append(newItem)
+
+                    # Sort by crowding function
+                    self.items = self.crowding_function(self.items)
+
+                    if self.add_item_before_crowding:
+                        # First element is most crowded, so delete it
+                        del self.items[0]
+                    else:
+                        # First element is most crowded, so replace it
+                        self.items[0] = newItem
                 else:
                     self.items.append(newItem)
