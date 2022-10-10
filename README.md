@@ -23,6 +23,7 @@ A multi-objective particle swarm optimizer, as explained in:
 ## NSCCDE ##
 
 A multi-objective differential evolution algorithm, as explained in:
+
 [Zhang, Zi-Hui, et al. "A non-dominated sorting cooperative co-evolutionary differential evolution algorithm for multi-objective layout optimization." IEEE Access 5 (2017): 14468-14477.](https://doi.org/10.1109/ACCESS.2017.2716111)
 
 ## CMOPSO (INCOMPLETE) ##
