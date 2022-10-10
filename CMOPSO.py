@@ -193,7 +193,7 @@ problem = get_problem("zdt1")
 tmp = problem.evaluate
 problem.evaluate = lambda x: -1 * tmp(x)
 
-fitnesses = CMOPSO(problem, 0.0, 1.0, 500, 100, 10, 25)
+fitnesses = CMOPSO(problem, 0.0, 1.0, 100, 100, 10, 25)
 
 # Visualize the results of the archive
 # Note: did fitnesses * -1 to revert the fitnesses back to their original values.

@@ -3,6 +3,8 @@ import random
 
 import numpy as np
 from scipy.spatial.distance import cdist
+from sklearn.preprocessing import MinMaxScaler
+from nds import ndomsort
 
 
 def numpy_dominates(x, y):
@@ -107,6 +109,26 @@ def crowdingDistance(items):
     return items
 
 
+def min_distance_indicator(items):
+    """
+    Calculates fitness of each solution in archive like explained in Section 3.1 of:
+
+    Cui, Yingying, Xi Meng, and Junfei Qiao.
+    "A multi-objective particle swarm optimization algorithm based on two-archive mechanism."
+    Applied Soft Computing 119 (2022): 108532.
+    """
+    fitnesses = np.array([item['fit'] for item in items])
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    fitnesses = scaler.fit_transform(fitnesses)
+
+    for i in range(len(fitnesses)):
+        shifted_fitnesses = fitnesses.copy()
+        for j in range(len(fitnesses)):
+            if i != j:
+                shift_dimensions = np.where(shifted_fitnesses[j] > fitnesses[i])
+                shifted_fitnesses[shift_dimensions] = fitnesses[shift_dimensions]
+
+
 class Grid:
     """
     Creating a grid based on the max and min values in objective space (fitness).
@@ -180,13 +202,19 @@ class Grid:
 
 
 class Archive:
-    def __init__(self, capacity, crowding_function=density, track=None, add_item_before_crowding=False):
+    def __init__(self,
+                 capacity,
+                 crowding_function=density,
+                 track=None,
+                 add_item_before_crowding=False,
+                 allow_dominated=False):
         """
         Trackable information:
             - (default) 'pos': Position of solution
             - (default) 'fit': Fitness of solution
             - (default) 'dist': Crowding measure of solution (can be for density or crowding distance)
             - 'sum_fit': Sum of fitness
+            - 'added_sol_idx': Returns the indices of solutions that were successfully added to archive (in add() function)
 
         Crowding functions:
             - Density
@@ -196,8 +224,10 @@ class Archive:
         :type capacity: int
         :param crowding_function: Crowding function used to remove archive entry when capacity is met.
         :param track: Additional information to track in archive
-        :param add_item_before_crowding: True if item needs to be added to archive and then have crowding calculations complete.
-            False if calculation is made first, and then solution replaced.
+        :param add_item_before_crowding: True if item needs to be added to archive and then
+            have crowding calculations complete. False if calculation is made first, and then solution replaced.
+        :param allow_dominated: Whether to allow dominated solutions to be added to archive if not full,
+            where non-dominated solutions have priority.
         """
         if track is None:
             track = []
@@ -206,6 +236,7 @@ class Archive:
         self.track = track
         self.crowding_function = crowding_function
         self.add_item_before_crowding = add_item_before_crowding
+        self.allow_dominated = allow_dominated
 
     def add(self, swarm, fitneses):
         """
@@ -219,17 +250,56 @@ class ParetoArchive(Archive):
     def add(self, pop, fitnesses):
         """
         Attempt to add solutions from population to
-        the archive, while still only containing
-        non-dominated solutions. If it's full,
-        use density calculations to remove the one
-        that's most crowded.
+        the archive in-place, while still only containing
+        non-dominated solutions. If it's full, use the given
+        crowding function to remove the one that's most crowded.
 
         :param pop: The population to be added.
         :param fitnesses: Fitnesses of population.
         """
         assert len(pop) == len(fitnesses)
 
+        if 'added_sol_idx' in self.track:
+            added_idxs = []
+
         for i in range(len(pop)):
+
+            # Allow dominated solutions section
+            if self.allow_dominated:
+                newItem = {
+                    "pos": pop[i].copy(),
+                    "fit": fitnesses[i].copy(),
+                    "dist": 0,
+                }
+
+                if 'sum_fit' in self.track:
+                    newItem['sum_fit'] = np.sum(fitnesses[i])
+
+                if 'added_sol_idx' in self.track:
+                    added_idxs.append(i)
+
+                self.items.append(newItem)
+
+                if len(self.items) < self.capacity:
+                    continue
+
+                crowdingDistance(self.items)  # sort archive by crowding distance
+
+                # Archive's at capacity, so first do non-dominated sort and get last front
+                nds = ndomsort.non_domin_sort(self.items, get_objectives=lambda x: x['fit'])
+                last_front_idx = max([int(val) for val in nds.keys()])
+                last_front = list(nds[last_front_idx])
+
+                # then, sort last front so first element is most crowded and remove
+                last_front.sort(key=lambda x: x['dist'])
+                for i in range(len(self.items)):
+                    if (self.items[i]['pos'] == last_front[0]['pos']).all():
+                        del self.items[i]
+                        break
+
+                continue
+
+            # This code runs if dominated solutions aren't allowed in archive (default)
             dominated = []  # Archive entries dominated by particle
             for j in range(len(self.items)):
                 if dominates(fitnesses[i], self.items[j]["fit"]):
@@ -256,6 +326,9 @@ class ParetoArchive(Archive):
                 if 'sum_fit' in self.track:
                     newItem['sum_fit'] = np.sum(fitnesses[i])
 
+                if 'added_sols' in self.track:
+                    added_idxs.append(i)
+
                 if len(self.items) >= self.capacity:
                     if self.add_item_before_crowding:
                         self.items.append(newItem)
@@ -271,3 +344,6 @@ class ParetoArchive(Archive):
                         self.items[0] = newItem
                 else:
                     self.items.append(newItem)
+
+        if 'added_sol_idx' in self.track:
+            return added_idxs

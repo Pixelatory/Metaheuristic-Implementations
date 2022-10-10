@@ -1,9 +1,7 @@
-import random
-
 import numpy as np
+from pymoo.factory import get_problem
 from pymoo.visualization.scatter import Scatter
 from tqdm import tqdm
-from pymoo.factory import get_problem
 
 from archive import ParetoArchive
 from util import lehmer_mean, gen_random_vector_idx
@@ -177,7 +175,7 @@ problem = get_problem("zdt1")
 # Must change the problem to -f(x) since CMODE assumes maximization.
 tmp = problem.evaluate
 problem.evaluate = lambda x: -1 * tmp(x)
-archive = CMODE(problem, 0.0, 1.0, 500, 20, 100, 0.1, 0.5, 0.5, 0.5, 0.9, 0.1, 0.1)
+archive = CMODE(problem, 0.0, 1.0, 100, 20, 100, 0.1, 0.5, 0.5, 0.5, 0.9, 0.1, 0.1)
 
 # Visualize the results of the archive
 # Note: did entry['fit'] * -1 to revert the fitnesses back to their original values.
