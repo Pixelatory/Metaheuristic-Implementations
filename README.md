@@ -20,6 +20,11 @@ A multi-objective particle swarm optimizer, as explained in:
 
 [Coello, CA Coello, and Maximino Salazar Lechuga. "MOPSO: A proposal for multiple objective particle swarm optimization." Proceedings of the 2002 Congress on Evolutionary Computation. CEC'02 (Cat. No. 02TH8600). Vol. 2. IEEE, 2002.](https://doi.org/10.1109/CEC.2002.1004388)
 
+## NSCCDE ##
+
+A multi-objective differential evolution algorithm, as explained in:
+[Zhang, Zi-Hui, et al. "A non-dominated sorting cooperative co-evolutionary differential evolution algorithm for multi-objective layout optimization." IEEE Access 5 (2017): 14468-14477.](https://doi.org/10.1109/ACCESS.2017.2716111)
+
 ## CMOPSO (INCOMPLETE) ##
 
 An attempted implementation of a competitive multi-objective particle swarm optimizer, as explained in:
